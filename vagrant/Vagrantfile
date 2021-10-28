@@ -1,0 +1,810 @@
+#INSTRUCTIONS
+# 1. setup vagrant with vagrant-aws plugin
+# 2. setup aws cli v2. with a profile saved to ~/.aws/credentials (just follow the aws cli v2 tutorial)
+# 3. export AWS_PRIVATE_KEY_PATH="/Users/xxx/.ssh/THE_AWS_KEY_YOU_USE_FROM_THE_AWS_CLI_V2_TUTORAL.pem";
+# 4. export AWS_KEYPAIR_NAME="THE_AWS_KEY_NAME"
+# 5. vagrant up
+##-----------------------------------------------------------------------
+## Machines definintsons
+
+#Epic machines 3.3ghz
+#  -CORES: Number of processors
+#  -MEM: Amount of physical memory installed
+#  -CTIME: Time to compile from scratch in minutes
+#  -RTIME: Time to re-compline
+#  -COST: AWS East cost / hour
+#--------------------------------------------------------------
+#MACHINE         CORES     MEM     CITME     RITME     COST
+#--------------------------------------------------------------
+#c5d.24xlarge:      96     192        42               3.70
+#c5d.16xlarge:      64     128        59               2.46
+#c5a.12xlarge:      48      96        70               1.85
+#c5a.8xlarge:       32      64        93               1.23
+#c5a.4xlarge:       16      32     crash                .62
+#c5a.2xlarge:        8      16         -                .31
+#c5a.xlarge:                 8         -                .15
+#c5a.large:                  4         -                .08
+MACH7="c5d.24xlarge"
+MACH6="c5a.16xlarge"
+MACH5="c5a.12xlarge"
+MACH4="c5a.8xlarge"
+MACH3="c5a.4xlarge"
+MACH2="c5a.2xlarge"
+MACH1="c5a.xlarge"
+MACH0="c5a.large"
+
+DEFAULT_MACH=MACH7
+
+UBUNTU2004_AMD64="ami-0a35dcc4aa0574b59"
+UBUNTU1804_AMD64="ami-0cac0a7e7f05274f6"
+QEMUCUSTOM="ami-0135b7152025be0f3"
+
+class Hash
+  def slice(*keep_keys)
+    h = {}
+    keep_keys.each { |key| h[key] = fetch(key) if has_key?(key) }
+    h
+  end unless Hash.method_defined?(:slice)
+  def except(*less_keys)
+    slice(*keys - less_keys)
+  end unless Hash.method_defined?(:except)
+end
+
+def which(cmd)
+  system("which #{ cmd} > /dev/null 2>&1")
+end
+
+class String
+  # colorization
+  def colorize(color_code)
+    "\e[#{color_code}m#{self}\e[0m"
+  end
+
+  def red
+    colorize(31)
+  end
+
+  def green
+    colorize(32)
+  end
+
+  def yellow
+    colorize(33)
+  end
+
+  def blue
+    colorize(34)
+  end
+
+  def pink
+    colorize(35)
+  end
+
+  def light_blue
+    colorize(36)
+  end
+end
+
+def setEnv()
+   puts "The programming language is #{a1}"
+   puts "The programming language is #{a2}"
+end
+
+require 'json'
+#UBUNTU 20.04 ARM64
+Vagrant.configure("2") do |awsmachines|
+  require 'vagrant-aws'
+  awsmachines.vm.box = "dummy"
+  awsmachines.vm.allowed_synced_folder_types = [:rsync]
+  awsmachines.trigger.after [:reload, :up] do |trigger|
+    trigger.info = "Setting up ssh config"
+    trigger.ruby do |env,machine|
+      if which("storm")
+        #if https://github.com/emre/storm present, updates ~/.ssh/config
+        sshkeypath = ENV['AWS_PRIVATE_KEY_PATH']
+        chost = machine.provider.instance_variable_get(:@machine).instance_variable_get(:@provider_config).instance_variable_get(:@tags)["Name"]
+        cuser = machine.provider.instance_variable_get(:@machine).instance_variable_get(:@provider_config).instance_variable_get(:@tags)["user"]
+        chostvncport = machine.provider.instance_variable_get(:@machine).instance_variable_get(:@provider_config).instance_variable_get(:@tags)["hostvncport"]
+        puts machine.provider.instance_variable_get(:@machine).instance_variable_get(:@provider_config).instance_variable_get(:@tags)
+        chostname = machine.provider.ssh_info[:host];
+        cport = machine.provider.ssh_info[:port];
+        ckpath = machine.provider.instance_variable_get(:@machine).instance_variable_get(:@config).instance_variable_get(:@keys).to_s
+        ckpath = ckpath.split('@private_key_path=["')[1].strip.to_s.split('"]')[0].strip.to_s
+        puts `storm delete #{chost} >> /dev/null 2>&1`
+        if "#{chostvncport}" != ""
+          vncline = "--o 'localforward=#{chostvncport} localhost:5901'"
+        else
+          vncline = ""
+        end
+        puts "storm add #{chost} #{cuser}@#{chostname}:#{cport} --id_file #{ckpath} --o 'StrictHostKeyChecking=no' --o 'UserKnownHostsFile=/dev/null' --o ForwardAgent=yes #{vncline}"
+        puts `storm add #{chost} #{cuser}@#{chostname}:#{cport} --id_file #{ckpath} --o 'StrictHostKeyChecking=no' --o 'UserKnownHostsFile=/dev/null' --o ForwardAgent=yes #{vncline}`
+        puts "SSH Capability added:".yellow+" ssh #{chost}".light_blue
+      end
+    end
+  end
+  awsmachines.trigger.after [:destroy, :halt] do |trigger|
+    trigger.info = "Setting up ssh config"
+    trigger.ruby do |env,machine|
+      if which("storm")
+        chost = machine.provider.instance_variable_get(:@machine).instance_variable_get(:@provider_config).instance_variable_get(:@tags)["Name"]
+        puts `storm delete #{chost}`
+      end
+    end
+  end
+class TestClass
+  @variable = "var"
+  class << self
+    attr_accessor :variable
+  end
+end
+class Buildobj
+    def initialize(ibranch,imachine,ibuild_directive,iparsec,icerts_path,iimage_name)
+      @branch = ibranch
+      @machine = imachine
+      @buildDirective = ibuild_directive
+      @parsecMode = iparsec
+      @certsPath = icerts_path
+      @imageName = iimage_name
+    end
+    def about()
+      puts "Branch: ".yellow+self.branch.light_blue
+      puts "Machine: ".yellow+self.machine.light_blue
+      puts "Build directive: ".yellow+self.buildDirective.light_blue
+      puts "parsec mode: ".yellow+self.parsecMode.light_blue
+      puts "certs path: ".yellow+self.certsPath.light_blue
+      puts "image: ".yellow+self.imageName.light_blue  
+    end
+    attr_accessor :branch, :machine, :buildDirective, :parsecMode, :certsPath, :imageName
+end
+
+
+
+def _stats(obj)
+ 
+end
+
+
+
+#-----------------------------------------------------------------------------------------------------#
+#                         ___        _      _      ____  _             _                              #
+#                        / _ \ _   _(_) ___| | __ / ___|| |_ __ _ _ __| |_ ___                        #
+#                       | | | | | | | |/ __| |/ / \___ \| __/ _` | '__| __/ __|                       #
+#                       | |_| | |_| | | (__|   <   ___) | || (_| | |  | |_\__ \                       #
+#                        \__\_\\__,_|_|\___|_|\_\ |____/ \__\__,_|_|   \__|___/                       #
+#                                                                                                     #
+#         https://developer.pelion.com/docs/device-management-edge/2.2/quick-start/index.html         #
+#-----------------------------------------------------------------------------------------------------#
+
+# This section attempts to provide a builder for each of the quick starts, as written by 
+# Preque
+
+# Quick start: LMP
+# Descripion: Builds exactly as outlined in the quick start.  See the "Dev Maps" section for people who want to work on the builds
+# Build OS: Ubunu 20.04 (note quick start calls for 18.04)
+# Permutations
+#     - image console-image
+#     - Machine: imx8
+#     - Mode: developer
+#     - Parsec: n/a
+
+
+
+  awsmachines.vm.define "quickstart" do |config_quickstart|
+
+    aimage = ENV['IMAGE']
+    amachine = ENV['MACHINE']
+    abuild = ENV['BUILDMODE']
+    repo_branch = ENV['BRANCH']
+    build_directive = "pretendbuild"
+    build_directive = "build"
+    mode="promodeHost"
+    mode="devmodeHost"
+    parsecMode="enableParsec"
+    parsecMode="disableParsec"
+    certs="~/CERTS/PRO-CLOUD-GL"
+    certs="~/CERTS/PRO-CLOUD-NEW"
+    aimage = "console-image-lmp" if aimage.nil?
+    #machine target.  Supported machines are: raspberrypi3-64, raspberrypi4-64, imx8mmevk imx8mmsolidrun, uz3eg-iocc
+    amachine = "uz3eg-iocc" if amachine.nil?
+    abuild = "devmode" if abuild.nil?
+    repo_branch = "master" if ENV['BRANCH'].nil?
+    repo_branch = "update_to_lmp_v83" if ENV['BRANCH'].nil?
+    repo_branch = "dev" if ENV['BRANCH'].nil?
+    config_quickstart.ssh.forward_agent = true
+    quickstartObj = Buildobj.new(repo_branch,amachine,build_directive,parsecMode,certs,aimage)
+    config_quickstart.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "quickstart",
+        'creator' => ENV['USER'],
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+      # --------Mapped folders------
+      # 1: developer certificates
+      #    Uncomment the following to add your developer certificates to the build machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/CERTS/" 
+       config_quickstart.vm.synced_folder certs, "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+      # 2: meta-pelion-edge 
+      #    Uncomment the following to map meta-pelion-edge from your local machine into your build machine.  This effectivly replaces the version of meta-pelion-edge that is normally checked out to the contents of your local machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/lmpbuild/layers/" 
+      config_quickstart.vm.synced_folder "~/workspace/meta-pelion-edge", "/home/ubuntu/lmpbuild/layers/meta-pelion-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+      config_quickstart.vm.synced_folder "~/workspace/meta-mbed-edge", "/home/ubuntu/lmpbuild/layers/meta-mbed-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive"]
+      config_quickstart.vm.provision "shell", privileged: true, path: "provisioning/ubuntu20_setup.sh",args: ["base lmpOnHost","emacs"]
+      config_quickstart.vm.provision "shell", privileged: false, path: "provisioning/configure-lmp.sh", args: ["lmpPrep lmpMpe "+mode+" "+parsecMode+"","quickstart","/home/ubuntu/lmpbuild",repo_branch,ENV['GITHUB_USER'],ENV['GITHUB_EMAIL'],"/home/ubuntu/lmpbuild/layers/*"]
+      config_quickstart.vm.provision "shell", privileged: false, path: "provisioning/build-lmp.sh", args: [build_directive,"/home/ubuntu/lmpbuild",amachine,aimage]
+      quickstartObj.about 
+   end
+
+
+
+  awsmachines.vm.define "quickstart2" do |config_quickstart2|
+
+    aimage = ENV['IMAGE']
+    amachine = ENV['MACHINE']
+    abuild = ENV['BUILDMODE']
+    repo_branch = ENV['BRANCH']
+    build_directive = "pretendbuild"
+    build_directive = "build"
+    mode="devmodeHost"
+    mode="promodeHost"
+    parsecMode="disableParsec"
+    parsecMode="enableParsec"
+    aimage = "console-image-lmp" if aimage.nil?
+    #machine target.  Supported machines are: raspberrypi3-64, raspberrypi4-64, imx8mmevk imx8mmsolidrun, uz3eg-iocc
+    amachine = "raspberrypi3-64" if amachine.nil?
+    abuild = "devmode" if abuild.nil?
+    repo_branch = "master" if repo_branch.nil?
+    config_quickstart2.ssh.forward_agent = true
+    config_quickstart2.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+MACH1+""
+      aws.tags = {
+        'Name' => "quickstart2",
+        'creator' => ENV['USER'],
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    # --------Mapped folders------
+    # 1: developer certificates
+    #    Uncomment the following to add your developer certificates to the build machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/CERTS/" 
+    config_quickstart2.vm.synced_folder "~/CERTS/PRO-CLOUD-UK", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    # 2: meta-pelion-edge 
+    #    Uncomment the following to map meta-pelion-edge from your local machine into your build machine.  This effectivly replaces the version of meta-pelion-edge that is normally checked out to the contents of your local machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/lmpbuild/layers/" 
+    config_quickstart2.vm.synced_folder "~/workspace/meta-pelion-edge", "/home/ubuntu/lmpbuild/layers/meta-pelion-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    config_quickstart2.vm.synced_folder "~/workspace/meta-mbed-edge", "/home/ubuntu/lmpbuild/layers/meta-mbed-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive"]
+    config_quickstart2.vm.provision "shell", privileged: true, path: "provisioning/ubuntu20_setup.sh",args: ["base lmpOnHost","emacs"]
+    config_quickstart2.vm.provision "shell", privileged: false, path: "provisioning/configure-lmp.sh", args: ["lmpPrep lmpMpe "+mode+" "+parsecMode+"","quickstart2","/home/ubuntu/lmpbuild",repo_branch,ENV['GITHUB_USER'],ENV['GITHUB_EMAIL'],"/home/ubuntu/lmpbuild/layers/*"]
+    config_quickstart2.vm.provision "shell", privileged: false, path: "provisioning/build-lmp.sh", args: [build_directive,"/home/ubuntu/lmpbuild",amachine,aimage]
+   end   
+
+
+  awsmachines.vm.define "nggw" do |config_nggw|
+    aimage = ENV['IMAGE']
+    amachine = ENV['MACHINE']
+    abuild = ENV['BUILDMODE']
+    repo_branch = ENV['BRANCH']
+    build_directive = "pretendbuild"
+    build_directive = "build"
+    mode="promodeHost"
+    mode="devmodeHost"
+    parsecMode="enableParsec"
+    parsecMode="disableParsec"
+    aimage = "console-image-lmp" if aimage.nil?
+    #machine target.  Supported machines are: raspberrypi3-64, raspberrypi4-64, imx8mmevk imx8mmsolidrun, uz3eg-iocc
+    amachine = "uz3cg-dgw" if amachine.nil?
+    abuild = "devmode" if abuild.nil?
+    repo_branch = "lmp-82-update" if repo_branch.nil?
+    config_nggw.ssh.forward_agent = true
+    config_nggw.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "nggw",
+        'creator' => ENV['USER'],
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    # --------Mapped folders------
+    # 1: developer certificates
+    #    Uncomment the following to add your developer certificates to the build machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/CERTS/" 
+    config_nggw.vm.synced_folder "~/CERTS/PRO-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    # 2: meta-pelion-edge 
+    #    Uncomment the following to map meta-pelion-edge from your local machine into your build machine.  This effectivly replaces the version of meta-pelion-edge that is normally checked out to the contents of your local machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/lmpbuild/layers/" 
+    #config_nggw.vm.synced_folder "~/workspace/meta-pelion-edge", "/home/ubuntu/lmpbuild/layers/meta-pelion-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    #config_nggw.vm.synced_folder "~/workspace/meta-mbed-edge", "/home/ubuntu/lmpbuild/layers/meta-mbed-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive"]
+    config_nggw.vm.provision "shell", privileged: true, path: "provisioning/ubuntu20_setup.sh",args: ["base lmpOnHost","emacs"]
+    config_nggw.vm.provision "shell", privileged: false, path: "provisioning/configure-lmp.sh", args: ["lmpPrep lmpNGGW "+mode+" "+parsecMode+"","nggw","/home/ubuntu/lmpbuild",repo_branch,ENV['GITHUB_USER'],ENV['GITHUB_EMAIL'],"/home/ubuntu/lmpbuild/layers/*"]
+    config_nggw.vm.provision "shell", privileged: false, path: "provisioning/build-lmp.sh", args: [build_directive,"/home/ubuntu/lmpbuild",amachine,aimage]
+   end
+ 
+
+  awsmachines.vm.define "pepserver" do |config_pepserver|
+    aimage = ENV['IMAGE']
+    amachine = ENV['MACHINE']
+    abuild = ENV['BUILDMODE']
+    repo_branch = ENV['BRANCH']
+
+    build_directive = "pretendbuild"
+    build_directive = "build"
+    mode="devmodeHost"
+    mode="promodeHost"
+    parsecMode="disableParsec"
+    parsecMode="enableParsec"
+    aimage = "console-image-lmp" if aimage.nil?
+    #machine target.  Supported machines are: raspberrypi3-64, raspberrypi4-64, imx8mmevk imx8mmsolidrun, uz3eg-iocc
+    amachine = "raspberrypi3-64" if amachine.nil?
+    abuild = "devmode" if abuild.nil?
+    repo_branch = "dev" if repo_branch.nil?
+    config_pepserver.ssh.forward_agent = true
+    config_pepserver.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+MACH2+""
+      aws.tags = {
+        'Name' => "pepserver",
+        'creator' => ENV['USER'],
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    # --------Mapped folders------
+    # 1: developer certificates
+    #    Uncomment the following to add your developer certificates to the build machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/CERTS/" 
+    config_pepserver.vm.synced_folder "~/CERTS/PRO-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    # 2: meta-pelion-edge 
+    #    Uncomment the following to map meta-pelion-edge from your local machine into your build machine.  This effectivly replaces the version of meta-pelion-edge that is normally checked out to the contents of your local machine.  The first Path is your local machine, *DO NOT* change the second path: "/home/ubuntu/lmpbuild/layers/" 
+    #config_pepserver.vm.synced_folder "~/workspace/meta-pelion-edge", "/home/ubuntu/lmpbuild/layers/meta-pelion-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    #config_pepserver.vm.synced_folder "~/workspace/meta-mbed-edge", "/home/ubuntu/lmpbuild/layers/meta-mbed-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive"]
+    config_pepserver.vm.provision "shell", privileged: true, path: "provisioning/ubuntu20_setup.sh",args: ["base lmpOnHost","emacs"]
+    #config_pepserver.vm.provision "shell", privileged: false, path: "provisioning/configure-lmp.sh", args: ["lmpOnHost "+mode+" "+parsecMode+"","pepserver","/home/ubuntu/lmpbuild",repo_branch,ENV['GITHUB_USER'],ENV['GITHUB_EMAIL'],"/home/ubuntu/lmpbuild/layers/*"]
+    #config_pepserver.vm.provision "shell", privileged: false, path: "provisioning/build-lmp.sh", args: [build_directive,"/home/ubuntu/lmpbuild",amachine,aimage]
+   end
+
+
+#--Ubuntu 20.04 AMD64
+# 3 identical machines that build for rpi (using our standard docker build)
+# Builds minimal-image
+# Maps a local copy of meta-pelion-edge into the remote host so that changes on the host are compiled by the remote.
+# 
+
+(1..3).each do |i|
+  awsmachines.vm.define "rpi_mapped_dockerbuild_#{i}" do |config_rpi_mapped_dockerbuild|
+    yimage = "console-image"
+    config_rpi_mapped_dockerbuild.ssh.forward_agent = true
+    config_rpi_mapped_dockerbuild.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "rpi_mapped_dockerbuild_#{i}",
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    config_rpi_mapped_dockerbuild.vm.synced_folder "~/Dropbox/WORK/CERTS/PRO-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    config_rpi_mapped_dockerbuild.vm.synced_folder "~/workspace/scripts-pelion-edge", "/home/ubuntu/scripts-pelion-edge", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    config_rpi_mapped_dockerbuild.vm.synced_folder "~/workspace/stable/#{i}/meta-pelion-edge", "/home/ubuntu/yoctobuild/poky/meta-pelion-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    config_rpi_mapped_dockerbuild.vm.provision :docker
+    config_rpi_mapped_dockerbuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+    config_rpi_mapped_dockerbuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-docker.sh"
+    config_rpi_mapped_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-init-manifest.sh", args: ["/home/ubuntu/yoctobuild/poky/meta-pelion-edge"]
+    config_rpi_mapped_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-build-docker.sh", args: [yimage]
+    #config_rpi_mapped_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-init-manifesttool.sh"
+  end
+end
+
+
+(1..3).each do |i|
+  awsmachines.vm.define "rpi_map_upgrade_dockerbuild_#{i}" do |config_rpi_map_upgrade_dockerbuild|
+    yimage = "console-image"
+    config_rpi_map_upgrade_dockerbuild.ssh.forward_agent = true
+    config_rpi_map_upgrade_dockerbuild.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "rpi_map_upgrade_dockerbuild_#{i}",
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    config_rpi_map_upgrade_dockerbuild.vm.synced_folder "~/Dropbox/WORK/CERTS/PRO-CLOUD-NEW", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    config_rpi_map_upgrade_dockerbuild.vm.synced_folder "~/workspace/scripts-pelion-edge", "/home/ubuntu/scripts-pelion-edge", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    config_rpi_map_upgrade_dockerbuild.vm.synced_folder "~/workspace/stable/#{i}/meta-pelion-edge", "/home/ubuntu/yoctobuild/poky/meta-pelion-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    config_rpi_map_upgrade_dockerbuild.vm.provision :docker
+    config_rpi_map_upgrade_dockerbuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+    config_rpi_map_upgrade_dockerbuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-docker.sh"
+    #config_rpi_map_upgrade_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-init-manifesttool.sh"
+    config_rpi_map_upgrade_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-init-manifest.sh", args: ["/home/ubuntu/yoctobuild/poky/meta-pelion-edge"]
+    config_rpi_map_upgrade_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-build-docker.sh", args: [yimage]
+  end
+end
+
+
+
+
+
+
+
+
+(1..3).each do |i|
+  awsmachines.vm.define "rpi_branch_dockerbuild_#{i}" do |config_rpi_branch_dockerbuild|
+    yimage = "console-image"
+    ybranch = "master"
+    config_rpi_branch_dockerbuild.ssh.forward_agent = true
+    config_rpi_branch_dockerbuild.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "rpi_branch_dockerbuild_#{i}",
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 50 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    config_rpi_branch_dockerbuild.vm.synced_folder "~/Dropbox/WORK/CERTS/PRO-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    #config_rpi_branch_dockerbuild.vm.synced_folder "~/workspace/stable/#{i}/meta-pelion-edge", "/home/ubuntu/yoctobuild/poky/meta-pelion-edge/", type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose", "--rsync-path='sudo rsync'", "--archive", "--delete", "-z"]
+    config_rpi_branch_dockerbuild.vm.provision :docker
+    config_rpi_branch_dockerbuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+    config_rpi_branch_dockerbuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-docker.sh"
+    config_rpi_branch_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-init-manifest.sh", args: ["", ybranch]
+    config_rpi_branch_dockerbuild.vm.provision "shell", privileged: false, path: "provisioning/user-build-docker.sh", args: [yimage]
+  end
+end
+
+#--Ubuntu 20.04 AMD64 nativepoky lmp_uz3 method of yocto
+(1..3).each do |i|
+  awsmachines.vm.define "mainifest_tool_builder_#{i}" do |config_mainifest_tool_builder|
+    yimage = "lmp-factory-image"
+    lmpmachine = "imx8mmevk"
+    config_mainifest_tool_builder.ssh.forward_agent = true
+    config_mainifest_tool_builder.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "mainifest_tool_builder_#{i}",
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    config_mainifest_tool_builder.vm.synced_folder "/Users/travis/Dropbox/WORK/CERTS/OS2-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    config_mainifest_tool_builder.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+    config_mainifest_tool_builder.vm.provision "shell", privileged:  false, path: "provisioning/user-manifest-builder.sh"
+    #config_mainifest_tool_builder.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-lmp-hostbuilder.sh"
+  end
+end
+
+
+
+#--Ubuntu 20.04 AMD64 nativepoky lmp_uz3 method of yocto
+# (1..3).each do |i|
+#   awsmachines.vm.define "lmp_branch_native_#{i}" do |config_lmp_branch_native|
+#     yimage = "console-image-lmp"
+#     lmpmachine = "imx8mmevk"
+#     config_lmp_branch_native.ssh.forward_agent = true
+#     config_lmp_branch_native.vm.provider :aws do |aws, override|
+#       aws.ami = ""+UBUNTU2004_AMD64+""
+#       aws.aws_dir = ENV['HOME'] + "/.aws/"
+#       aws.aws_profile = "default"
+#       aws.security_groups = ["default"]
+#       aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+#       aws.region = 'us-east-1'
+#       aws.instance_type = ""+DEFAULT_MACH+""
+#       aws.tags = {
+#         'Name' => "lmp_branch_native_#{i}",
+#         'os' => 'ubuntu',
+#         'user'=> 'ubuntu'
+#       }
+#       aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+#       override.ssh.username = "ubuntu"
+#       override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+#     end
+#     config_lmp_branch_native.vm.synced_folder "~/Dropbox/WORK/CERTS/OS2-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+#     config_lmp_branch_native.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+#     config_lmp_branch_native.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-lmp-hostbuilder.sh"
+#     config_lmp_branch_native.vm.provision "shell", privileged: false, path: "provisioning/configure-lmp.sh", args: ["lmpOnHost","/home/ubuntu/lmpbuild/","dev",ENV['GITHUB_USER'],ENV['GITHUB_EMAIL'],""]
+#     config_lmp_branch_native.vm.provision "shell", privileged: false, path: "provisioning/user-build-lmp-native.sh", args: [lmpmachine,yimage]
+#   end
+# end
+
+#--Ubuntu 20.04 AMD64 nativepoky lmp_uz3 method of yocto
+(1..3).each do |i|
+  awsmachines.vm.define "lmp_branch_native_#{i}" do |config_lmp_branch_native|
+    yimage = "console-image-lmp"
+    lmpmachine = "imx8mmevk"
+    lmpbranch = "dev"
+    config_lmp_branch_native.ssh.forward_agent = true
+    config_lmp_branch_native.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "lmp_branch_native_#{i}",
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    config_lmp_branch_native.vm.synced_folder "~/Dropbox/WORK/CERTS/OS2-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    config_lmp_branch_native.vm.provision "shell", privileged: true, path: "provisioning/ubuntu20_setup.sh",args: ["base lmpOnHost","emacs"]
+    config_lmp_branch_native.vm.provision "shell", privileged: false, path: "provisioning/configure-lmp.sh", args: ["lmpOnHost devmodeHost","/home/ubuntu/lmpbuild",lmpbranch,ENV['GITHUB_USER'],ENV['GITHUB_EMAIL'],""]
+    config_lmp_branch_native.vm.provision "shell", privileged: false, path: "provisioning/build-lmp.sh", args: ["build","/home/ubuntu/lmpbuild",lmpmachine,yimage]
+  end
+end
+
+#--Ubuntu 20.04 AMD64 nativepoky lmp_uz3 method of yocto
+(1..3).each do |i|
+  awsmachines.vm.define "foundries_mapped_native_#{i}" do |config_foundries_mapped_native|
+    yimage = "lmp-factory-image"
+    lmpmachine = "imx8mmevk"
+    config_foundries_mapped_native.ssh.forward_agent = true
+    config_foundries_mapped_native.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU2004_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "foundries_mapped_native_#{i}",
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu'
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    config_foundries_mapped_native.vm.synced_folder "~/workspace/stable/#{i}/meta-pelion-edge", "/home/ubuntu/lmpbuild/layers/meta-pelion-edge/",type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose",  "--archive", "--delete", "-z"]
+    config_foundries_mapped_native.vm.synced_folder "~/workspace/stable/#{i}/meta-subscriber-overrides", "/home/ubuntu/lmpbuild/layers/meta-subscriber-overrides/",type: "rsync", owner: "ubuntu", group: "ubuntu", rsync__exclude: ".git/", rsync__rsync_ownership: "true", rsync__args: ["--verbose",  "--archive", "--delete", "-z"]
+    config_foundries_mapped_native.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+    config_foundries_mapped_native.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-lmp-hostbuilder.sh"
+    #config_foundries_mapped_native.vm.provision "shell", privileged: false, path: "provisioning/user-init-lmp.sh", args: [ENV['FOUNDRIES_ACCESS_TOKEN'],ENV['GITHUB_USER'],ENV['GITHUB_EMAIL'],"/home/ubuntu/lmpbuild/layers/meta-pelion-edge /home/ubuntu/lmpbuild/layers/meta-subscriber-overrides"]
+    config_foundries_mapped_native.vm.provision "shell", privileged: false, path: "provisioning/user-foundries-build.sh", args: [lmpmachine,yimage]
+  end
+end
+
+
+=begin About
+hostvncport  will be mapped to the remote AWS instance vnc running locally on 5901. The syntax uses the id incrementor [i].  machine ####_i will map to hostvncport ###i. For instance.  If the machine name is mymachine_#{i}, and the hostvncport is 600#{i}, then the instance mymachine_1 will map to 6001, and mymachine_2 will be mapped to 6002...
+
+
+=end
+#U20
+# (1..3).each do |i|
+#   awsmachines.vm.define "rpi_mapped_nativebuild_#{i}" do |config_rpi_mapped_nativebuild|
+#     config_rpi_mapped_nativebuild.ssh.forward_agent = true
+#     config_rpi_mapped_nativebuild.vm.provider :aws do |aws, override|
+#       aws.ami = ""+UBUNTU2004_AMD64+""
+#       aws.aws_dir = ENV['HOME'] + "/.aws/"
+#       aws.aws_profile = "default"
+#       aws.security_groups = ["default"]
+#       aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+#       aws.region = 'us-east-1'
+#       aws.instance_type = ""+DEFAULT_MACH+""
+#       aws.tags = {
+#         'Name' => "rpi_mapped_nativebuild_#{i}",
+#         'os' => 'ubuntu',
+#         'user'=> 'ubuntu',
+#         'hostvncport'=> "600#{i}"
+#       }
+#       aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+#       override.ssh.username = "ubuntu"
+#       override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+#     end
+#     config_rpi_mapped_nativebuild.vm.synced_folder "~/Dropbox/WORK/CERTS/PRO-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+#     config_rpi_mapped_nativebuild.vm.synced_folder "~/workspace/meta-pelion-edge", "/home/ubuntu/yoctobuild/poky/meta-pelion-edge/", type: "rsync", rsync__exclude: ".git/"
+#     config_rpi_mapped_nativebuild.vm.synced_folder "~/workspace/meta-mbed-edge", "/home/ubuntu/yoctobuild/poky/meta-mbed-edge/", type: "rsync", rsync__exclude: ".git/"
+#     config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+#     config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-yocto-hostbuilder.sh"
+#     config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-vnc.sh", args: ["testpwd"]
+#      config_rpi_mapped_nativebuild.vm.provision "shell", privileged: false, path: "provisioning/user-init-manifest.sh"
+#      config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  false, path: "provisioning/user-build-yocto-host.sh", args: ["console-image", "build"]
+#      config_rpi_mapped_nativebuild.trigger.after [:up] do |trigger|
+#         trigger.info = "Instructions to use VNC.\n1. ssh rpi_mapped_nativebuild_#{i}\n2. ./startvnc.sh\n3. on your local host sart a vnc session to localhost:600#{i}"
+#       end
+#     #config_rpi_mapped_nativebuild.vm.provision "shell", privileged: false, path: "provisioning/user-build-yocto-native.sh", args: ["console-image", "build"]
+#     if (ENV['DO_INLINE_BURN'])
+#       config_rpi_mapped_nativebuild.trigger.after [:up] do |trigger|
+#         trigger.info = "Setting up ssh config"
+#         trigger.run = {path: "triggers/sdburn.sh", args: ["streamburn","rpi_mapped_nativebuild_#{i}:/home/ubuntu/yoctobuild/poky/build/tmp/deploy/images/raspberrypi3-64/core-image-minimal-raspberrypi3-64.wic.bz2", "/dev/rdisk5"]}
+#       end
+#     end
+#   end
+# end
+
+
+#U20
+(1..3).each do |i|
+  awsmachines.vm.define "rpi_mapped_nativebuild_#{i}" do |config_rpi_mapped_nativebuild|
+    config_rpi_mapped_nativebuild.ssh.forward_agent = true
+    config_rpi_mapped_nativebuild.vm.provider :aws do |aws, override|
+      aws.ami = ""+UBUNTU1804_AMD64+""
+      aws.aws_dir = ENV['HOME'] + "/.aws/"
+      aws.aws_profile = "default"
+      aws.security_groups = ["default"]
+      aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+      aws.region = 'us-east-1'
+      aws.instance_type = ""+DEFAULT_MACH+""
+      aws.tags = {
+        'Name' => "rpi_mapped_nativebuild_#{i}",
+        'os' => 'ubuntu',
+        'user'=> 'ubuntu',
+        'hostvncport'=> "600#{i}"
+      }
+      aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+      override.ssh.username = "ubuntu"
+      override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+    end
+    config_rpi_mapped_nativebuild.vm.synced_folder "~/Dropbox/WORK/CERTS/PRO-CLOUD", "/home/ubuntu/CERTS/", type: "rsync", rsync__exclude: ".git/"
+    config_rpi_mapped_nativebuild.vm.synced_folder "~/workspace/meta-pelion-edge", "/home/ubuntu/yoctobuild/poky/meta-pelion-edge/", type: "rsync", rsync__exclude: ".git/"
+    config_rpi_mapped_nativebuild.vm.synced_folder "~/workspace/meta-mbed-edge", "/home/ubuntu/yoctobuild/poky/meta-mbed-edge/", type: "rsync", rsync__exclude: ".git/"
+    config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+    config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-yocto-hostbuilder.sh"
+    config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-vnc.sh", args: ["testpwd"]
+    config_rpi_mapped_nativebuild.vm.provision "shell", privileged: false, path: "provisioning/user-init-manifest.sh", args: ["/home/ubuntu/yoctobuild/poky/meta-pelion-edge"]
+    config_rpi_mapped_nativebuild.vm.provision "shell", privileged:  false, path: "provisioning/user-build-yocto-host.sh", args: ["console-image", "build"]
+    config_rpi_mapped_nativebuild.trigger.after [:up] do |trigger|
+      trigger.info = "Instructions to use VNC.\n1. ssh rpi_mapped_nativebuild_#{i}\n2. ./startvnc.sh\n3. on your local host sart a vnc session to localhost:600#{i}"
+    end
+    #config_rpi_mapped_nativebuild.vm.provision "shell", privileged: false, path: "provisioning/user-build-yocto-native.sh", args: ["console-image", "build"]
+  end
+end
+
+
+
+
+
+#--Ubuntu 20.04 AMD64 nativepoky justrpi method of yocto
+awsmachines.vm.define "rpi_mapped_piway" do |config_rpi_mapped_piway|
+  config_rpi_mapped_piway.ssh.forward_agent = true
+  config_rpi_mapped_piway.vm.provider :aws do |aws, override|
+    aws.ami = ""+UBUNTU2004_AMD64+""
+    aws.aws_dir = ENV['HOME'] + "/.aws/"
+    aws.aws_profile = "default"
+    aws.security_groups = ["default"]
+    aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+    aws.region = 'us-east-1'
+    aws.instance_type = ""+DEFAULT_MACH+""
+    aws.tags = {
+      'Name' => 'rpi_mapped_piway',
+      'os' => 'ubuntu',
+      'user'=> 'ubuntu'
+    }
+    aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 100 }]
+    override.ssh.username = "ubuntu"
+    override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+  end
+  config_rpi_mapped_piway.vm.synced_folder "~/workspace/poky", "/home/ubuntu/yoctobuild/poky/", type: "rsync",rsync__exclude: ".git/"
+  config_rpi_mapped_piway.vm.synced_folder "~/workspace/meta-raspberrypi", "/home/ubuntu/yoctobuild/poky/meta-raspberrypi/", type: "rsync", rsync__exclude: ".git/"
+  config_rpi_mapped_piway.vm.synced_folder "~/workspace/meta-virtualization", "/home/ubuntu/yoctobuild/poky/meta-virtualization/", type: "rsync", rsync__exclude: ".git/"
+  config_rpi_mapped_piway.vm.synced_folder "~/workspace/meta-openembedded", "/home/ubuntu/yoctobuild/poky/meta-openembedded/", type: "rsync", rsync__exclude: ".git/", rsync__auto: false
+  config_rpi_mapped_piway.vm.synced_folder "~/workspace/meta-pelion-edge", "/home/ubuntu/yoctobuild/poky/meta-pelion-edge/", type: "rsync", rsync__exclude: ".git/"
+  config_rpi_mapped_piway.vm.synced_folder "~/workspace/meta-mbed-edge", "/home/ubuntu/yoctobuild/poky/meta-mbed-edge/", type: "rsync", rsync__exclude: ".git/"
+  config_rpi_mapped_piway.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-base.sh"
+  config_rpi_mapped_piway.vm.provision "shell", privileged:  true, path: "provisioning/u20-init-root-add-yocto-hostbuilder.sh"
+  config_rpi_mapped_piway.vm.provision "shell", privileged: false, path: "provisioning/user-rpiway-build.sh", args: ["core-image-minimal", "build"]
+  config_rpi_mapped_piway.trigger.after [:up] do |trigger|
+    trigger.info = "Setting up ssh config"
+    trigger.run = {path: "triggers/sdburn.sh", args: ["streamburn","rpi_mapped_piway:/home/ubuntu/yoctobuild/poky/build/tmp/deploy/images/raspberrypi3-64/core-image-minimal-raspberrypi3-64.wic.bz2", "/dev/rdisk5"]}
+  end
+
+end
+
+
+
+#--Ubuntu 18.04 AMD64
+awsmachines.vm.define "u18_amd64" do |config_u18_amd64|
+  config_u18_amd64.vm.provider :aws do |aws, override|
+    aws.ami = ""+UBUNTU1804_AMD64+""
+    aws.aws_dir = ENV['HOME'] + "/.aws/"
+    aws.aws_profile = "default"
+    aws.security_groups = ["default"]
+    aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+    aws.region = 'us-east-2'
+    aws.instance_type = 't3.large'
+    aws.tags = {
+      'Name' => 'u18_amd64',
+      'os' => 'ubuntu',
+      'user'=> 'ubuntu'
+    }
+    aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 50 }]
+    override.ssh.username = "ubuntu"
+    override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+  end
+end
+
+#--Ubuntu 16.04 AMD64
+awsmachines.vm.define "u16_amd64" do |config_u16_amd64|
+  config_u16_amd64.vm.provider :aws do |aws, override|
+    aws.ami = "ami-0900b965bba5bd298"
+    aws.aws_dir = ENV['HOME'] + "/.aws/"
+    aws.aws_profile = "default"
+    aws.security_groups = ["default"]
+    aws.keypair_name = ENV['AWS_KEYPAIR_NAME']
+    aws.region = 'us-east-2'
+    aws.instance_type = 't3a.nano'
+    aws.tags = {
+      'Name' => 'u16_amd64',
+      'os' => 'ubuntu',
+      'user'=> 'ubuntu'
+    }
+    aws.block_device_mapping = [{ 'DeviceName' => '/dev/sda1', 'Ebs.VolumeSize' => 50 }]
+    override.ssh.username = "ubuntu"
+    override.ssh.private_key_path = ENV['AWS_PRIVATE_KEY_PATH']
+  end
+end
+
+
+
+
+end

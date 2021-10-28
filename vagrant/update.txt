@@ -1,0 +1,12 @@
+The following will build the upcoming 2.4 with https
+mkdir ~/build
+cd ~/build
+repo init -u https://github.com/PelionIoT/manifest-lmp-pelion-edge.git -b lmp-82-update -m pelion.xml || true 
+git clone -b pelion-edge-24-lmp-82 https://github.com/PelionIoT/manifest-lmp-pelion-edge-nggw.git .repo/local_manifests
+sed -i 's,^BBLAYERS += " \\,BBLAYERS += "${OEROOT}/layers/meta-user \\,g' .repo/manifests/conf/bblayers.conf repo sync -j"$(nproc)" --force-sync || true
+repo sync -j"$(nproc)"
+(DO YOUR CERTS WORK HERE)
+cd <build dir>
+MACHINE=uz3cg-dgw source setup-environment
+bitbake console-image-lmp
+
